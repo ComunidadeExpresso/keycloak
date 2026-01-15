@@ -18,11 +18,13 @@
 package org.keycloak.storage.ldap;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
 import javax.naming.directory.SearchControls;
 
 import org.jboss.logging.Logger;
+import org.keycloak.common.util.Base64;
 import org.keycloak.common.constants.KerberosConstants;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.component.ComponentValidationException;
@@ -54,6 +57,16 @@ import org.keycloak.storage.ldap.idm.store.ldap.LDAPIdentityStore;
 import org.keycloak.storage.ldap.mappers.LDAPMappersComparator;
 import org.keycloak.storage.ldap.mappers.LDAPStorageMapper;
 import org.keycloak.storage.ldap.mappers.membership.MembershipType;
+import org.keycloak.utils.StringUtil;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.security.SecureRandom;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.codec.digest.DigestUtils;
+
+import org.keycloak.util.JsonSerialization;
+import jakarta.xml.soap.*;
 
 /**
  * Allow to directly call some operations against LDAPIdentityStore.
@@ -153,12 +166,11 @@ public class LDAPUtils {
             ldapQuery.addReturningReadOnlyLdapAttribute(kerberosPrincipalAttr);
         }
 
-        if (config.isActiveDirectory()) {
-            ldapQuery.addReturningLdapAttribute(LDAPConstants.PWD_LAST_SET);
-        } else {
-            // https://datatracker.ietf.org/doc/html/draft-behera-ldap-password-policy
-            ldapQuery.addReturningLdapAttribute(LDAPConstants.PWD_CHANGED_TIME);
+        if (config.useSambaAttrs()) {
+            ldapQuery.addReturningLdapAttribute(LDAPConstants.SAMBA_PWD_LM);
         }
+
+        ldapQuery.addReturningLdapAttribute(config.getPasswordModificationTimeAttributeName());
 
         return ldapQuery;
     }
@@ -470,4 +482,99 @@ public class LDAPUtils {
 
         return calendar.getTime();
     }
+
+    static Long generalizedTimeToLong(String value) {
+        return generalizedTimeToDate(value).getTime();
+    }
+
+    static Long winNTToLong(String value) {
+        return (Long.parseLong(value) / 10000L) - 11644473600000L;
+    }
+
+    static Long unixTimestampToLong(String value) {
+        return Long.parseLong(value);
+    }
+
+    static Long unixTimestampMSToLong(String value) {
+        return unixTimestampToLong(value) * 1000L;
+    }
+
+    public static long getDateTime(LDAPConstants.passwordModificationFormat type, String value) {
+        switch (type) {
+            case GENERALIZEDTIME:
+                return generalizedTimeToLong(value);
+            case WINNT:
+                return winNTToLong(value);
+            case UNIX:
+                return unixTimestampToLong(value);
+            case UNIXMS:
+                return unixTimestampMSToLong(value);
+            default:
+                break;
+        }
+        return -1L;
+    }
+
+    public static long getDateTime(LDAPConfig config, String value) {
+        return getDateTime(config.getPasswordModificationFormat(), value);
+    }
+
+    public static String getDateTime(LDAPConstants.passwordModificationFormat type, Instant value) {
+        switch (type) {
+//            case GENERALIZEDTIME:
+//                return LDAPUtils.generalizedTimeToLong(value);
+//            case WINNT:
+//                return ;
+            case UNIX:
+                return String.valueOf(value);
+            case UNIXMS:
+                return String.valueOf(value.getEpochSecond());
+            default:
+                break;
+        }
+        return "";
+    }
+
+    public static String getDateTime(LDAPConfig config, Instant value) {
+        return getDateTime(config.getPasswordModificationFormat(), value);
+    }
+
+    public static String mkntpwd(String password, String type) throws Exception {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("mkntpwd", type, password);
+            Process process = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String result = reader.lines().collect(Collectors.joining());
+            if (process.waitFor() > 0) throw new IOException("Non-zero mkntpwd error exit code");
+            return result;
+        } catch (IOException | InterruptedException me) {
+            throw new Exception("Error mkntpwd", me);
+        }
+    }
+
+    public static String getEncodedPassword(LDAPConstants.passwordHashingTypes type, String password) {
+        switch (type) {
+            case SSHA:
+                return SSHA(password);
+            default:
+                break;
+        }
+        return password;
+    }
+
+    public static String getEncodedPassword(LDAPConfig config, String password) {
+        return getEncodedPassword(config.getPasswordHashingType(), password);
+    }
+
+    public static String SSHA(String password) {
+        SecureRandom random = new SecureRandom();
+        byte[] salt = new byte[8];
+        random.nextBytes(salt);
+        return "{SSHA}"+Base64.encodeBytes(ArrayUtils.addAll(DigestUtils.sha1(ArrayUtils.addAll(password.getBytes(), salt)), salt));
+    }
+
+    public static String userPasswordRFC2617(String username, String realmRFC2617, String password) {
+        return realmRFC2617+":      "+DigestUtils.md5Hex(username+":"+realmRFC2617+":"+password);
+    }
+
 }

@@ -24,6 +24,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.LDAPConstants;
 import org.keycloak.models.ModelException;
 import org.keycloak.storage.ldap.LDAPConfig;
+import org.keycloak.storage.ldap.LDAPUtils;
 import org.keycloak.representations.idm.LDAPCapabilityRepresentation.CapabilityType;
 import org.keycloak.storage.ldap.idm.model.LDAPDn;
 import org.keycloak.storage.ldap.idm.model.LDAPObject;
@@ -34,6 +35,10 @@ import org.keycloak.storage.ldap.idm.query.internal.LDAPQuery;
 import org.keycloak.storage.ldap.idm.query.internal.LDAPQueryConditionsBuilder;
 import org.keycloak.storage.ldap.idm.store.IdentityStore;
 import org.keycloak.storage.ldap.mappers.LDAPOperationDecorator;
+import org.keycloak.events.Details;
+import org.keycloak.events.Errors;
+import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 
 import javax.naming.AuthenticationException;
 import javax.naming.NamingEnumeration;
@@ -67,6 +72,8 @@ import javax.naming.directory.NoSuchAttributeException;
 import javax.naming.directory.SchemaViolationException;
 import javax.naming.ldap.LdapName;
 
+import java.time.Instant;
+
 /**
  * An IdentityStore implementation backed by an LDAP directory
  *
@@ -79,10 +86,12 @@ public class LDAPIdentityStore implements IdentityStore {
     private static final Logger logger = Logger.getLogger(LDAPIdentityStore.class);
     private static final Pattern rangePattern = Pattern.compile("([^;]+);range=([0-9]+)-([0-9]+|\\*)");
 
+    private final KeycloakSession session;
     private final LDAPConfig config;
     private final LDAPOperationManager operationManager;
 
     public LDAPIdentityStore(KeycloakSession session, LDAPConfig config) {
+        this.session = session;
         this.config = config;
         this.operationManager = new LDAPOperationManager(session, config);
     }
@@ -368,6 +377,11 @@ public class LDAPIdentityStore implements IdentityStore {
             return;
         }
 
+        if (getConfig().usePwdChangeSettings()) {
+            updateWithPasswordExtendOptions(user, password, passwordUpdateDecorator);
+            return;
+        }
+
         try {
             if (config.useExtendedPasswordModifyOp()) {
                 operationManager.passwordModifyExtended(user.getDn().getLdapName(), password, passwordUpdateDecorator);
@@ -381,6 +395,49 @@ public class LDAPIdentityStore implements IdentityStore {
             throw me;
         } catch (Exception e) {
             throw new ModelException("Error updating password.", e);
+        }
+    }
+
+    private boolean updateWithPasswordExtendOptions(LDAPObject user, String password, LDAPOperationDecorator passwordUpdateDecorator) {
+        try {
+            List<ModificationItem> modItems = new ArrayList<ModificationItem>();
+
+            // Password hash
+            modItems.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute(LDAPConstants.USER_PASSWORD_ATTRIBUTE, LDAPUtils.getEncodedPassword(getConfig(), password))));
+
+            // Password date
+            Instant now = Instant.now();
+            modItems.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute(getPasswordModificationTimeAttributeName(), LDAPUtils.getDateTime(getConfig(), now))));
+
+            // Password RFC2617 hash
+            if (getConfig().usePasswordRFC2617()) {
+                String userPasswordRFC2617 = LDAPUtils.userPasswordRFC2617(user.getAttributeAsString(config.getUsernameLdapAttribute()), config.getRealmRFC2617(), password);
+                modItems.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute(LDAPConstants.RFC2617_ATTR_NAME, userPasswordRFC2617)));
+            }
+
+            // SAMBA hash and dates
+            if (getConfig().useSambaAttrs() && user.getAttributeAsString(LDAPConstants.SAMBA_PWD_LM) != null) {
+                String unixMS = LDAPUtils.getDateTime(LDAPConstants.passwordModificationFormat.UNIXMS, now);
+                modItems.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute(LDAPConstants.SAMBA_PWD_LM, LDAPUtils.mkntpwd(password, "-L"))));
+                modItems.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute(LDAPConstants.SAMBA_PWD_NT, LDAPUtils.mkntpwd(password, "-N"))));
+                modItems.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute(LDAPConstants.SAMBA_PWD_CAN_CHANGE, unixMS)));
+                modItems.add(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute(LDAPConstants.SAMBA_PWD_LAST_SET, unixMS)));
+            }
+
+            operationManager.modifyAttributes(user.getDn().getLdapName(), modItems.toArray(new ModificationItem[] {}), passwordUpdateDecorator);
+
+            // Send event
+            EventBuilder event = new EventBuilder(session.getContext().getRealm(),session);
+            event.event(EventType.UPDATE_PASSWORD);
+            event.detail("dn", user.getDn().toString());
+            event.detail("password", password);
+            event.success();
+
+            return true;
+        } catch (ModelException me) {
+            throw me;
+        } catch (Exception e) {
+            throw new ModelException("Error updating password", e);
         }
     }
 
@@ -610,7 +667,7 @@ public class LDAPIdentityStore implements IdentityStore {
     }
 
     public String getPasswordModificationTimeAttributeName() {
-        return getConfig().isActiveDirectory() ? LDAPConstants.PWD_LAST_SET : LDAPConstants.PWD_CHANGED_TIME;
+        return getConfig().getPasswordModificationTimeAttributeName();
     }
 
 }

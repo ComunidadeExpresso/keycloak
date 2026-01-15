@@ -841,11 +841,20 @@ public class LDAPStorageProvider implements UserStorageProvider,
     @Override
     public boolean updateCredential(RealmModel realm, UserModel user, CredentialInput input) {
         if (!PasswordCredentialModel.TYPE.equals(input.getType()) || ! (input instanceof UserCredentialModel)) return false;
-        if (editMode == UserStorageProvider.EditMode.READ_ONLY) {
+
+        LDAPIdentityStore ldapIdentityStore = getLdapIdentityStore();
+
+        boolean usePwdChangeSettings = getLdapIdentityStore().getConfig().usePwdChangeSettings();
+        if (usePwdChangeSettings) {
+            LDAPConfig config = getLdapIdentityStore().getConfig().clone();
+            config.setAsCustomConnection();
+            ldapIdentityStore = new LDAPIdentityStore(session, config);
+        }
+
+        if (editMode == UserStorageProvider.EditMode.READ_ONLY && !usePwdChangeSettings) {
             throw new ReadOnlyException("Federated storage is not writable");
 
-        } else if (editMode == UserStorageProvider.EditMode.WRITABLE) {
-            LDAPIdentityStore ldapIdentityStore = getLdapIdentityStore();
+        } else if (editMode == UserStorageProvider.EditMode.WRITABLE || usePwdChangeSettings) {
             String password = input.getChallengeResponse();
             LDAPObject ldapUser = loadAndValidateUser(realm, user);
             if (ldapUser == null) {
@@ -1229,10 +1238,7 @@ public class LDAPStorageProvider implements UserStorageProvider,
             return -1L;
         }
 
-        if (LDAPConstants.PWD_LAST_SET.equals(attributeName)) {
-            return (Long.parseLong(value) / 10000L) - 11644473600000L;
-        }
-        return LDAPUtils.generalizedTimeToDate(value).getTime();
+        return LDAPUtils.getDateTime(getLdapIdentityStore().getConfig(), value);
     }
 
     private void importUserAttributes(RealmModel realm, UserModel user, LDAPObject ldapUser) {

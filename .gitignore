@@ -18,6 +18,9 @@
 #bin/
 .factorypath
 
+# pnpm
+###################
+.pnpm-store
 
 # NetBeans #
 ############

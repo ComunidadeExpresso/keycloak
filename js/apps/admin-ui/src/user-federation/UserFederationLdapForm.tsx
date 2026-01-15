@@ -10,6 +10,7 @@ import { useRealm } from "../context/realm-context/RealmContext";
 import useIsFeatureEnabled, { Feature } from "../utils/useIsFeatureEnabled";
 import { LdapSettingsAdvanced } from "./ldap/LdapSettingsAdvanced";
 import { LdapSettingsConnection } from "./ldap/LdapSettingsConnection";
+import { LdapSettingsPasswordChange } from "./ldap/LdapSettingsPasswordChange";
 import { LdapSettingsGeneral } from "./ldap/LdapSettingsGeneral";
 import { LdapSettingsKerberosIntegration } from "./ldap/LdapSettingsKerberosIntegration";
 import { LdapSettingsSearching } from "./ldap/LdapSettingsSearching";
@@ -51,6 +52,10 @@ export const UserFederationLdapForm = ({
           {
             title: t("connectionAndAuthenticationSettings"),
             panel: <LdapSettingsConnection form={form} id={id} />,
+          },
+          {
+            title: t("passwordChangeSettings"),
+            panel: <LdapSettingsPasswordChange form={form} id={id} />,
           },
           {
             title: t("ldapSearchingAndUpdatingSettings"),

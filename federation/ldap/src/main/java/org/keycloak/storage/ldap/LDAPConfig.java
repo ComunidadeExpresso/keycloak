@@ -28,11 +28,14 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+import org.apache.commons.lang3.SerializationUtils;
+import java.io.Serializable;
+
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  *
  */
-public class LDAPConfig {
+public class LDAPConfig implements Serializable {
 
     private final MultivaluedHashMap<String, String> config;
     private final Set<String> binaryAttributeNames = new HashSet<>();
@@ -121,6 +124,71 @@ public class LDAPConfig {
     public boolean isActiveDirectory() {
         String vendor = getVendor();
         return vendor != null && vendor.equals(LDAPConstants.VENDOR_ACTIVE_DIRECTORY);
+    }
+
+    public boolean usePwdChangeSettings() {
+        String value = config.getFirst(LDAPConstants.USE_PWD_CHANGE_SETTINGS);
+        return Boolean.parseBoolean(value);
+    }
+
+    public boolean useSambaAttrs() {
+        String value = config.getFirst(LDAPConstants.USE_SAMBA_ATTRS);
+        return Boolean.parseBoolean(value);
+    }
+
+    public boolean usePasswordRFC2617() {
+        String value = config.getFirst(LDAPConstants.USE_RFC2617_ATTR);
+        return Boolean.parseBoolean(value);
+    }
+
+    public String getRealmRFC2617() {
+        return config.getFirst(LDAPConstants.RFC2617_REALM);
+    }
+
+    public String getPasswordModificationTimeAttributeName() {
+        if (isActiveDirectory()) return LDAPConstants.PWD_LAST_SET;
+        if (usePwdChangeSettings()) {
+            String passwordChangeTimeAttr = config.getFirst(LDAPConstants.PWD_CHANGED_TIME_CUSTOM_ATTR);
+            if (passwordChangeTimeAttr != null && !passwordChangeTimeAttr.isEmpty()) {
+                return passwordChangeTimeAttr;
+            }
+        }
+        // https://datatracker.ietf.org/doc/html/draft-behera-ldap-password-policy
+        return LDAPConstants.PWD_CHANGED_TIME;
+    }
+
+    public LDAPConstants.passwordModificationFormat getPasswordModificationFormat() {
+        if (isActiveDirectory()) return LDAPConstants.passwordModificationFormat.WINNT;
+        String fmt = config.getFirst(LDAPConstants.PWD_CHANGED_TIME_CUSTOM_FMT);
+        if (fmt != null && !fmt.isEmpty()) {
+            return LDAPConstants.passwordModificationFormat.valueOf(fmt.toUpperCase());
+        }
+        return LDAPConstants.passwordModificationFormat.GENERALIZEDTIME;
+    }
+
+    public LDAPConstants.passwordHashingTypes getPasswordHashingType() {
+        String type = config.getFirst(LDAPConstants.PWD_HASHING_FMT);
+        if (type != null && !type.isEmpty()) {
+            return LDAPConstants.passwordHashingTypes.valueOf(type.toUpperCase());
+        }
+        return LDAPConstants.passwordHashingTypes.PLAIN;
+    }
+
+    public void setAsCustomConnection() {
+        String connectionUrl = config.getFirst(LDAPConstants.CONNECTION_URL_PWD_CH);
+        if (connectionUrl != null && connectionUrl != "") {
+            config.putSingle(LDAPConstants.CONNECTION_URL, connectionUrl);
+            config.putSingle(LDAPConstants.START_TLS, config.getFirst(LDAPConstants.START_TLS_PWD_CH));
+            config.putSingle(LDAPConstants.USE_TRUSTSTORE_SPI, config.getFirst(LDAPConstants.USE_TRUSTSTORE_SPI_PWD_CH));
+            config.putSingle(LDAPConstants.CONNECTION_POOLING, config.getFirst(LDAPConstants.CONNECTION_POOLING_PWD_CH));
+            config.putSingle(LDAPConstants.CONNECTION_TIMEOUT, config.getFirst(LDAPConstants.CONNECTION_TIMEOUT_PWD_CH));
+        }
+
+        String bindDn = config.getFirst(LDAPConstants.BIND_DN_PWD_CH);
+        if (bindDn != null && bindDn != "") {
+            config.putSingle(LDAPConstants.BIND_DN, bindDn);
+            config.putSingle(LDAPConstants.BIND_CREDENTIAL, config.getFirst(LDAPConstants.BIND_CREDENTIAL_PWD_CH));
+        }
     }
 
     public boolean isValidatePasswordPolicy() {
@@ -259,6 +327,10 @@ public class LDAPConfig {
 
     public Set<String> getBinaryAttributeNames() {
         return binaryAttributeNames;
+    }
+
+    public LDAPConfig clone() {
+        return SerializationUtils.clone(this);
     }
 
     public boolean isConnectionTrace() {

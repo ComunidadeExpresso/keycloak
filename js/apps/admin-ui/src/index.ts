@@ -290,6 +290,7 @@ export * as LdapMapperDetails from "./user-federation/ldap/mappers/LdapMapperDet
 export { LdapMapperList } from "./user-federation/ldap/mappers/LdapMapperList";
 export { LdapSettingsAdvanced } from "./user-federation/ldap/LdapSettingsAdvanced";
 export { LdapSettingsConnection } from "./user-federation/ldap/LdapSettingsConnection";
+export { LdapSettingsPasswordChange } from "./user-federation/ldap/LdapSettingsPasswordChange";
 export { LdapSettingsGeneral } from "./user-federation/ldap/LdapSettingsGeneral";
 export { LdapSettingsKerberosIntegration } from "./user-federation/ldap/LdapSettingsKerberosIntegration";
 export { LdapSettingsSearching } from "./user-federation/ldap/LdapSettingsSearching";

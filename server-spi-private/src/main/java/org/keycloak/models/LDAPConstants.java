@@ -147,6 +147,38 @@ public class LDAPConstants {
 
     public static final String CONNECTION_TRACE = "connectionTrace";
 
+    public static final String USE_PWD_CHANGE_SETTINGS = "usePasswordChangeSettings";
+    public static final String PWD_CHANGE_SETTINGS_SUFFIX = "PwdChange";
+    public static final String CONNECTION_URL_PWD_CH = CONNECTION_URL + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String START_TLS_PWD_CH = START_TLS + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String USE_TRUSTSTORE_SPI_PWD_CH = USE_TRUSTSTORE_SPI + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String CONNECTION_POOLING_PWD_CH = CONNECTION_POOLING + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String CONNECTION_TIMEOUT_PWD_CH = CONNECTION_TIMEOUT + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String AUTH_TYPE_PWD_CH = AUTH_TYPE + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String BIND_DN_PWD_CH = BIND_DN + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String BIND_CREDENTIAL_PWD_CH = BIND_CREDENTIAL + PWD_CHANGE_SETTINGS_SUFFIX;
+    public static final String PWD_HASHING_FMT = "passwordHashingFormat";
+    public static final String PWD_CHANGED_TIME_CUSTOM_ATTR = "passwordChangeTimeAttr";
+    public static final String PWD_CHANGED_TIME_CUSTOM_FMT = "passwordChangeTimeFormat";
+    // samba.schema
+    public static final String USE_SAMBA_ATTRS = "useSambaAttrs";
+    public static final String SAMBA_PWD_LM = "sambaLMPassword";
+    public static final String SAMBA_PWD_NT = "sambaNTPassword";
+    public static final String SAMBA_PWD_CAN_CHANGE = "sambaPwdCanChange";
+    public static final String SAMBA_PWD_LAST_SET = "sambaPwdLastSet";
+    // custom.schema
+    public static final String USE_RFC2617_ATTR = "useRFC2617Attr";
+    public static final String RFC2617_ATTR_NAME = "userPasswordRFC2617";
+    public static final String RFC2617_REALM = "RFC2617Realm";
+
+    public static enum passwordModificationFormat {
+        GENERALIZEDTIME, WINNT, UNIX, UNIXMS
+    }
+
+    public static enum passwordHashingTypes {
+        PLAIN, SSHA
+    }
+
     public static String getUuidAttributeName(String vendor) {
         if (vendor != null) {
             switch (vendor) {

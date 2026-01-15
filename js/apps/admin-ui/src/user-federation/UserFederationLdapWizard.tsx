@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import useIsFeatureEnabled, { Feature } from "../utils/useIsFeatureEnabled";
 import { LdapSettingsAdvanced } from "./ldap/LdapSettingsAdvanced";
 import { LdapSettingsConnection } from "./ldap/LdapSettingsConnection";
+import { LdapSettingsPasswordChange } from "./ldap/LdapSettingsPasswordChange";
 import { LdapSettingsGeneral } from "./ldap/LdapSettingsGeneral";
 import { LdapSettingsKerberosIntegration } from "./ldap/LdapSettingsKerberosIntegration";
 import { LdapSettingsSearching } from "./ldap/LdapSettingsSearching";
@@ -73,6 +74,16 @@ export const UserFederationLdapWizard = () => {
         id="ldapConnectionSettingsStep"
       >
         <LdapSettingsConnection
+          form={form}
+          showSectionHeading
+          showSectionDescription
+        />
+      </WizardStep>
+      <WizardStep
+        name={t("passwordChangeSettings")}
+        id="ldapPasswordChangeSettingsStep"
+      >
+        <LdapSettingsPasswordChange
           form={form}
           showSectionHeading
           showSectionDescription
